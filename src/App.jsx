@@ -9,7 +9,7 @@ import {
   Sparkles, Ticket, Plane, FileText, Search, Receipt, ShieldCheck, 
   Image as ImageIcon, CreditCard, Banknote, ToggleLeft, ToggleRight, Ban, 
   AlertCircle, Tag, Sunset, Globe, MessageCircle, Instagram, Camera, Lock, 
-  LogOut, Shield, UserCog, Key
+  LogOut, Shield, UserCog, Key, Copy
 } from 'lucide-react';
 
 // ==========================================
@@ -1679,6 +1679,7 @@ function MainApp() {
                     </td>
                     <td className="py-5 px-6 text-right">
                       <div className="flex justify-end gap-2">
+                        <button onClick={() => { setEditingActivity({ ...act, id: null, date: '', discountCode: '' }); setActivityFormType(act.type || 'course'); setTimeInput(act.time || ''); setStep('admin_add'); }} title="複製排程 (快速新增)" className="p-2.5 bg-teal-50 text-teal-600 hover:bg-teal-100 rounded-full transition-colors"><Copy size={18} /></button>
                         <button onClick={() => { setEditingActivity({ ...act }); setActivityFormType(act.type || 'course'); setTimeInput(act.time || ''); setStep('admin_add'); }} title="編輯活動" className="p-2.5 bg-orange-50 text-indigo-900/50 hover:text-orange-600 hover:bg-orange-100 rounded-full transition-colors"><Pencil size={18} /></button>
                         <button onClick={async () => { if(window.confirm('確定刪除？')) { const actRef = doc(db, 'artifacts', appId, 'public', 'data', 'activities', act.id); await deleteDoc(actRef); } }} title="刪除活動" className="p-2.5 bg-rose-50 text-rose-400 hover:text-rose-600 hover:bg-rose-100 rounded-full transition-colors"><Trash2 size={18} /></button>
                       </div>
@@ -2021,19 +2022,35 @@ function MainApp() {
   };
 
   const renderAdminAddPanel = () => {
-    const isEdit = !!editingActivity;
-    // 使用頂層的 activityFormType 避免 React Hook 順序錯亂
+    // 若 draft.id 有值代表是編輯，否則是新增或複製
+    const isEdit = editingActivity && editingActivity.id !== null;
+    const draft = editingActivity || {};
     const isUnavailable = activityFormType === 'unavailable';
 
     const handleGenerateCode = () => {
       document.getElementById('adminDiscountCode').value = Math.random().toString(36).substring(2, 8).toUpperCase();
     };
 
-    const handleAdd = async (e) => {
-      e.preventDefault();
+    // 智慧填寫：選擇課程時自動帶入費用
+    const handleTitleChange = (e) => {
+      const val = e.target.value;
+      const matchedCourse = courseList.find(c => c.name === val);
+      if (matchedCourse && matchedCourse.price) {
+         const form = e.target.closest('form');
+         const priceInput = form.querySelector('[name="price"]');
+         if (priceInput && !priceInput.value) {
+            priceInput.value = matchedCourse.price;
+         }
+      }
+    };
+
+    const handleAdd = async (eOrForm, addAnother = false) => {
+      if (eOrForm && eOrForm.preventDefault) eOrForm.preventDefault();
+      const form = (eOrForm && eOrForm.target && eOrForm.target.tagName === 'FORM') ? eOrForm.target : eOrForm;
+
       try {
         if (!db) return alert("資料庫未連線，無法儲存。");
-        const fd = new FormData(e.target);
+        const fd = new FormData(form);
         const dStr = fd.get('date') || '';
         const actType = fd.get('type') || 'course';
         const isUnavail = actType === 'unavailable';
@@ -2047,34 +2064,48 @@ function MainApp() {
         
         let spots = totalSpots;
         if (isEdit && !isUnavail) {
-           const prevTotal = parseInt(editingActivity.totalSpots, 10) || 0;
-           const prevSpots = parseInt(editingActivity.spots, 10) || 0;
-           const diff = prevTotal - prevSpots; // 已報名人數
+           const prevTotal = parseInt(draft.totalSpots, 10) || 0;
+           const prevSpots = parseInt(draft.spots, 10) || 0;
+           const diff = prevTotal - prevSpots; 
            spots = Math.max(0, totalSpots - diff);
         }
 
         const newAct = { 
-          id: isEdit ? editingActivity.id : 'act_' + Date.now(), 
+          id: isEdit ? draft.id : 'act_' + Date.now() + Math.random().toString(36).substring(2, 6), 
           date: dStr,
           time: fd.get('time') || '', 
           title: fd.get('title') || '', 
           instructor: fd.get('instructor') || '', 
           spots, totalSpots, minSpots, price, type: actType, location: loc,
-          initiator: isEdit ? (editingActivity.initiator || null) : null,
+          initiator: draft.initiator || null,
           discountCode, discountAmount
         };
 
         const actRef = doc(db, 'artifacts', appId, 'public', 'data', 'activities', newAct.id);
         await setDoc(actRef, newAct, { merge: true });
 
-        // 若編輯時更改了日期，刪除舊有日期的活動紀錄
-        if (isEdit && editingActivity.date !== dStr) {
-           const oldActRef = doc(db, 'artifacts', appId, 'public', 'data', 'activities', editingActivity.id);
+        if (isEdit && draft.date !== dStr) {
+           const oldActRef = doc(db, 'artifacts', appId, 'public', 'data', 'activities', draft.id);
            await deleteDoc(oldActRef);
         }
 
-        setStep('admin_dashboard');
         alert(isEdit ? '✅ 排程已成功更新！' : '✅ 排程已成功新增！');
+
+        if (addAnother && !isEdit) {
+           // 繼續新增模式：清空日期讓教練快速選下一天
+           const dateInput = form.querySelector('[name="date"]');
+           if (dateInput) {
+               dateInput.value = '';
+               dateInput.focus();
+           }
+           // 若有折扣碼則重新生成，避免共用代碼
+           const dcInput = form.querySelector('[name="discountCode"]');
+           if (dcInput && dcInput.value) {
+               dcInput.value = Math.random().toString(36).substring(2, 8).toUpperCase();
+           }
+        } else {
+           setStep('admin_dashboard');
+        }
       } catch (err) {
         console.error("儲存活動失敗:", err);
         alert('❌ 儲存失敗，請檢查輸入的資料：' + err.message);
@@ -2087,17 +2118,17 @@ function MainApp() {
           <div className="absolute top-0 right-0 -mr-10 -mt-10 w-40 h-40 bg-white/20 rounded-full blur-2xl"></div>
           <h2 className="text-3xl font-black text-white flex items-center gap-3 relative z-10">
             {isEdit ? <Pencil size={32}/> : <Plus size={32}/>}
-            {isEdit ? '編輯活動排程' : '教練直接新增排程'}
+            {isEdit ? '編輯活動排程' : (draft.title ? '複製並新增排程' : '教練直接新增排程')}
           </h2>
         </div>
-        <form onSubmit={handleAdd} className="p-10 space-y-8">
+        <form onSubmit={(e) => handleAdd(e, false)} className="p-10 space-y-8">
           {isUnavailable && (
             <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-slate-600 text-sm font-bold flex items-center gap-2 mb-4 shadow-sm">
               <Info size={18}/> 選擇「休假 / 停開」時，人數與費用將自動設為 0，且該時段不開放學員報名。
             </div>
           )}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
-            <div><label className="block text-sm font-black text-indigo-900 mb-3">日期 *</label><input required type="date" name="date" defaultValue={editingActivity?.date} className="w-full px-5 py-4 bg-orange-50/50 border-2 border-transparent focus:border-orange-400 focus:bg-white rounded-2xl outline-none font-bold transition-colors" /></div>
+            <div><label className="block text-sm font-black text-indigo-900 mb-3">日期 *</label><input required type="date" name="date" defaultValue={draft?.date} className="w-full px-5 py-4 bg-orange-50/50 border-2 border-transparent focus:border-orange-400 focus:bg-white rounded-2xl outline-none font-bold transition-colors" /></div>
             <div>
               <label className="block text-sm font-black text-indigo-900 mb-3">時間時段 (可點選常用或自訂) *</label>
               <input required type="text" name="time" value={timeInput} onChange={e => setTimeInput(e.target.value)} placeholder="如：09:00 - 12:00" className="w-full px-5 py-4 bg-orange-50/50 border-2 border-transparent focus:border-orange-400 focus:bg-white rounded-2xl outline-none font-bold transition-colors mb-3" />
@@ -2109,12 +2140,12 @@ function MainApp() {
             </div>
             <div className="sm:col-span-2">
               <label className="block text-sm font-black text-indigo-900 mb-3">{isUnavailable ? '休假/事由名稱 *' : '活動名稱 *'}</label>
-              <input required type="text" name="title" defaultValue={editingActivity?.title} list="c-opts" placeholder={isUnavailable ? "如：教練進修、場地維護" : "請輸入或選擇課程名稱"} className="w-full px-5 py-4 bg-orange-50/50 border-2 border-transparent focus:border-orange-400 focus:bg-white rounded-2xl outline-none font-bold transition-colors" />
+              <input required type="text" name="title" defaultValue={draft?.title} onChange={handleTitleChange} list="c-opts" placeholder={isUnavailable ? "如：教練進修、場地維護" : "請輸入或選擇課程名稱"} className="w-full px-5 py-4 bg-orange-50/50 border-2 border-transparent focus:border-orange-400 focus:bg-white rounded-2xl outline-none font-bold transition-colors" />
               <datalist id="c-opts">{courseList.map(c => <option key={c.id} value={c.name}/>)}</datalist>
             </div>
             <div>
               <label className="block text-sm font-black text-indigo-900 mb-3">帶團教練 / 休假教練 *</label>
-              <input required type="text" name="instructor" defaultValue={editingActivity?.instructor} list="t-opts" placeholder="請輸入或選擇教練" className="w-full px-5 py-4 bg-orange-50/50 border-2 border-transparent focus:border-orange-400 focus:bg-white rounded-2xl outline-none font-bold transition-colors" />
+              <input required type="text" name="instructor" defaultValue={draft?.instructor} list="t-opts" placeholder="請輸入或選擇教練" className="w-full px-5 py-4 bg-orange-50/50 border-2 border-transparent focus:border-orange-400 focus:bg-white rounded-2xl outline-none font-bold transition-colors" />
               <datalist id="t-opts">{coachList.map(c => <option key={c.id} value={c.name}/>)}</datalist>
             </div>
             <div>
@@ -2125,12 +2156,12 @@ function MainApp() {
             </div>
             {!isUnavailable && (
               <>
-                <div><label className="block text-sm font-black text-indigo-900 mb-3">滿團人數 (最大值) *</label><input required type="number" min="1" name="totalSpots" defaultValue={editingActivity?.totalSpots} placeholder="如：8" className="w-full px-5 py-4 bg-orange-50/50 border-2 border-transparent focus:border-orange-400 focus:bg-white rounded-2xl outline-none font-bold transition-colors" /></div>
-                <div><label className="block text-sm font-black text-indigo-900 mb-3">成團人數 (最低限制) *</label><input required type="number" min="1" name="minSpots" defaultValue={editingActivity?.minSpots || 1} placeholder="如：4" className="w-full px-5 py-4 bg-orange-50/50 border-2 border-transparent focus:border-orange-400 focus:bg-white rounded-2xl outline-none font-bold transition-colors" /></div>
-                <div><label className="block text-sm font-black text-indigo-900 mb-3">單人報名費用 (NT$) *</label><input required type="number" min="0" name="price" defaultValue={editingActivity?.price} placeholder="如：12000" className="w-full px-5 py-4 bg-orange-50/50 border-2 border-transparent focus:border-orange-400 focus:bg-white rounded-2xl outline-none font-bold transition-colors" /></div>
+                <div><label className="block text-sm font-black text-indigo-900 mb-3">滿團人數 (最大值) *</label><input required type="number" min="1" name="totalSpots" defaultValue={draft?.totalSpots || 8} placeholder="如：8" className="w-full px-5 py-4 bg-orange-50/50 border-2 border-transparent focus:border-orange-400 focus:bg-white rounded-2xl outline-none font-bold transition-colors" /></div>
+                <div><label className="block text-sm font-black text-indigo-900 mb-3">成團人數 (最低限制) *</label><input required type="number" min="1" name="minSpots" defaultValue={draft?.minSpots || 4} placeholder="如：4" className="w-full px-5 py-4 bg-orange-50/50 border-2 border-transparent focus:border-orange-400 focus:bg-white rounded-2xl outline-none font-bold transition-colors" /></div>
+                <div><label className="block text-sm font-black text-indigo-900 mb-3">單人報名費用 (NT$) *</label><input required type="number" min="0" name="price" defaultValue={draft?.price} placeholder="如：12000" className="w-full px-5 py-4 bg-orange-50/50 border-2 border-transparent focus:border-orange-400 focus:bg-white rounded-2xl outline-none font-bold transition-colors" /></div>
                 <div>
                   <label className="block text-sm font-black text-indigo-900 mb-3">活動集合地點 *</label>
-                  <input required type="text" name="location" defaultValue={editingActivity?.location} list="l-opts" placeholder="請輸入或選擇地點" className="w-full px-5 py-4 bg-orange-50/50 border-2 border-transparent focus:border-orange-400 focus:bg-white rounded-2xl outline-none font-bold transition-colors" />
+                  <input required type="text" name="location" defaultValue={draft?.location} list="l-opts" placeholder="請輸入或選擇地點" className="w-full px-5 py-4 bg-orange-50/50 border-2 border-transparent focus:border-orange-400 focus:bg-white rounded-2xl outline-none font-bold transition-colors" />
                   <datalist id="l-opts">{locationList.map(l => <option key={l.id} value={l.name}/>)}</datalist>
                 </div>
                 
@@ -2139,20 +2170,32 @@ function MainApp() {
                 <div>
                   <label className="block text-sm font-black text-indigo-900 mb-3">學生專屬折扣碼 (僅限此梯次)</label>
                   <div className="flex gap-2">
-                    <input id="adminDiscountCode" type="text" name="discountCode" defaultValue={editingActivity?.discountCode} placeholder="如：STU500" className="flex-1 px-5 py-4 bg-orange-50/50 border-2 border-transparent focus:border-rose-400 focus:bg-white rounded-2xl outline-none font-bold transition-colors uppercase" />
+                    <input id="adminDiscountCode" type="text" name="discountCode" defaultValue={draft?.discountCode} placeholder="如：STU500" className="flex-1 px-5 py-4 bg-orange-50/50 border-2 border-transparent focus:border-rose-400 focus:bg-white rounded-2xl outline-none font-bold transition-colors uppercase" />
                     <button type="button" onClick={handleGenerateCode} className="px-5 bg-amber-100 hover:bg-amber-200 text-amber-700 rounded-2xl font-black text-sm transition-colors whitespace-nowrap">隨機產生</button>
                   </div>
                 </div>
                 <div>
                   <label className="block text-sm font-black text-indigo-900 mb-3">折扣折抵金額 (NT$)</label>
-                  <input type="number" min="0" name="discountAmount" defaultValue={editingActivity?.discountAmount} placeholder="如：500" className="w-full px-5 py-4 bg-orange-50/50 border-2 border-transparent focus:border-rose-400 focus:bg-white rounded-2xl outline-none font-bold transition-colors" />
+                  <input type="number" min="0" name="discountAmount" defaultValue={draft?.discountAmount} placeholder="如：500" className="w-full px-5 py-4 bg-orange-50/50 border-2 border-transparent focus:border-rose-400 focus:bg-white rounded-2xl outline-none font-bold transition-colors" />
                 </div>
               </>
             )}
           </div>
-          <div className="border-t border-orange-100 pt-8 flex justify-end gap-4">
-            <button type="button" onClick={() => setStep('admin_dashboard')} className="px-10 py-4 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-2xl font-black text-lg transition-colors">取消</button>
-            <button type="submit" className="px-12 py-4 bg-gradient-to-r from-orange-500 to-rose-500 hover:from-orange-600 hover:to-rose-600 text-white rounded-2xl font-black text-lg shadow-lg hover:scale-105 transition-all">確認儲存上架</button>
+          <div className="border-t border-orange-100 pt-8 flex flex-col sm:flex-row justify-end gap-4">
+            <button type="button" onClick={() => setStep('admin_dashboard')} className="w-full sm:w-auto px-10 py-4 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-2xl font-black text-lg transition-colors order-3 sm:order-1">取消</button>
+            {!isEdit && (
+                <button type="button" onClick={(e) => {
+                    const form = e.target.closest('form');
+                    if (form.reportValidity()) {
+                        handleAdd(form, true);
+                    }
+                }} className="w-full sm:w-auto px-8 py-4 bg-teal-500 hover:bg-teal-600 text-white rounded-2xl font-black text-lg shadow-lg hover:scale-105 transition-all order-2">
+                    儲存並繼續新增
+                </button>
+            )}
+            <button type="submit" className="w-full sm:w-auto px-12 py-4 bg-gradient-to-r from-orange-500 to-rose-500 hover:from-orange-600 hover:to-rose-600 text-white rounded-2xl font-black text-lg shadow-lg hover:scale-105 transition-all order-1 sm:order-3">
+               {isEdit ? '確認儲存更新' : '確認新增上架'}
+            </button>
           </div>
         </form>
       </div>
