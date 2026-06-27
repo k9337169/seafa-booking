@@ -792,7 +792,7 @@ function MainApp() {
               <div className="bg-orange-50/30 p-8 rounded-[2rem] border border-orange-50 shadow-sm">
                 <label className="block text-[15px] font-black text-indigo-900 mb-5 tracking-wide">人魚尾巴/服裝尺寸 (或選擇自備) *</label>
                 <div className="grid grid-cols-3 sm:grid-cols-5 gap-4">
-                  {['S', 'M', 'L', 'XL', '自備'].map(size => (
+                  {['30-33', '33-36', '36-37', '37-39', '40-42', '42-44', '44以上', '自備'].map(size => (
                     <button key={size} type="button" onClick={() => setFormData({...formData, tailSize: size})} className={`py-4 rounded-2xl font-black text-lg transition-all border-2 shadow-sm tracking-widest ${formData.tailSize === size ? (size === '自備' ? 'border-teal-500 bg-teal-50 text-teal-700' : 'border-orange-500 bg-orange-50 text-orange-700 hover:-translate-y-1') : 'border-orange-100 text-indigo-900/50 hover:border-orange-300 bg-white hover:text-orange-600 hover:-translate-y-1'}`}>
                       {size}
                     </button>
