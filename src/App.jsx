@@ -17,12 +17,13 @@ import {
 // ⚠️ 注意：請「只替換引號裡面的字」，千萬不要刪除或覆蓋到左邊的變數名稱！
 // ==========================================
 const myFirebaseConfig = {
-  apiKey: "AIzaSyBNciR4vCeqHZoJWQnu0o_IzFK_e3dlHZY",
-  authDomain: "seafa-booking.firebaseapp.com",
-  projectId: "seafa-booking",
-  storageBucket: "seafa-booking.firebasestorage.app",
-  messagingSenderId: "724643313917",
-  appId: "1:724643313917:web:93c612461e82cdeb622694"
+  apiKey: "AIzaSyCBnw5393iBd3-itWOxAvuJLnHg8M0HcnY",
+  authDomain: "seafa-booking-dce98.firebaseapp.com",
+  projectId: "seafa-booking-dce98",
+  storageBucket: "seafa-booking-dce98.firebasestorage.app",
+  messagingSenderId: "618969590876",
+  appId: "1:618969590876:web:05369180df42ec90e0ca99",
+  measurementId: "G-739LQ14JQP"
 };
 
 // --- 系統自動判斷環境與防呆檢查 (絕對不要動這裡的程式碼喔) ---
