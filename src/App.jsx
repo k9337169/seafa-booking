@@ -229,7 +229,7 @@ function MainApp() {
   const [editingActivity, setEditingActivity] = useState(null);
   const [wishToActData, setWishToActData] = useState(null);
   const [activityFormType, setActivityFormType] = useState('course');
-  const [timeInput, setTimeInput] = useState(''); // 新增：用於控制時間時段的輸入與快速選擇
+  const [timeInput, setTimeInput] = useState(''); 
 
   // --- Firebase 初始化與資料綁定 ---
   useEffect(() => {
@@ -1613,9 +1613,20 @@ function MainApp() {
   };
 
   const renderActivitiesTab = () => {
-    const allActivities = Object.entries(activities).flatMap(([date, acts]) => acts.map(act => ({ ...act, date }))).sort((a, b) => new Date(a.date) - new Date(b.date));
     const today = new Date();
     today.setHours(0, 0, 0, 0);
+
+    const allActivities = Object.entries(activities)
+      .flatMap(([date, acts]) => acts.map(act => ({ ...act, date })))
+      .sort((a, b) => {
+         const timeA = new Date(a.date || 0).getTime();
+         const timeB = new Date(b.date || 0).getTime();
+         // 保護機制：如果有壞掉的日期 (NaN)，將其放到陣列最底下，避免排序崩潰
+         if (isNaN(timeA) && isNaN(timeB)) return 0;
+         if (isNaN(timeA)) return 1;
+         if (isNaN(timeB)) return -1;
+         return timeA - timeB;
+      });
 
     return (
       <div className="animate-in fade-in duration-300">
@@ -2054,6 +2065,12 @@ function MainApp() {
 
         const actRef = doc(db, 'artifacts', appId, 'public', 'data', 'activities', newAct.id);
         await setDoc(actRef, newAct, { merge: true });
+
+        // 若編輯時更改了日期，刪除舊有日期的活動紀錄
+        if (isEdit && editingActivity.date !== dStr) {
+           const oldActRef = doc(db, 'artifacts', appId, 'public', 'data', 'activities', editingActivity.id);
+           await deleteDoc(oldActRef);
+        }
 
         setStep('admin_dashboard');
         alert(isEdit ? '✅ 排程已成功更新！' : '✅ 排程已成功新增！');
