@@ -215,6 +215,7 @@ function MainApp() {
   const [isAgreed, setIsAgreed] = useState(false);
   const rulesRef = useRef(null);
   const sessionListRef = useRef(null); 
+  const addFormRef = useRef(null);
   const [searchPhone, setSearchPhone] = useState('');
   const [searchResults, setSearchResults] = useState(null);
   const [formData, setFormData] = useState({ tailSize: 'M', paymentMethod: 'transfer' });
@@ -2023,12 +2024,13 @@ function MainApp() {
 
   const renderAdminAddPanel = () => {
     // 若 draft.id 有值代表是編輯，否則是新增或複製
-    const isEdit = editingActivity && editingActivity.id !== null;
+    const isEdit = !!(editingActivity && editingActivity.id);
     const draft = editingActivity || {};
     const isUnavailable = activityFormType === 'unavailable';
 
     const handleGenerateCode = () => {
-      document.getElementById('adminDiscountCode').value = Math.random().toString(36).substring(2, 8).toUpperCase();
+      const dcInput = document.getElementById('adminDiscountCode');
+      if (dcInput) dcInput.value = Math.random().toString(36).substring(2, 8).toUpperCase();
     };
 
     // 智慧填寫：選擇課程時自動帶入費用
@@ -2036,20 +2038,24 @@ function MainApp() {
       const val = e.target.value;
       const matchedCourse = courseList.find(c => c.name === val);
       if (matchedCourse && matchedCourse.price) {
-         const form = e.target.closest('form');
-         const priceInput = form.querySelector('[name="price"]');
-         if (priceInput && !priceInput.value) {
-            priceInput.value = matchedCourse.price;
+         const form = addFormRef.current;
+         if (form) {
+            const priceInput = form.querySelector('[name="price"]');
+            if (priceInput && !priceInput.value) {
+               priceInput.value = matchedCourse.price;
+            }
          }
       }
     };
 
-    const handleAdd = async (eOrForm, addAnother = false) => {
-      if (eOrForm && eOrForm.preventDefault) eOrForm.preventDefault();
-      const form = (eOrForm && eOrForm.target && eOrForm.target.tagName === 'FORM') ? eOrForm.target : eOrForm;
+    const handleAdd = async (e, addAnother = false) => {
+      if (e && e.preventDefault) e.preventDefault();
 
       try {
         if (!db) return alert("資料庫未連線，無法儲存。");
+        const form = addFormRef.current;
+        if (!form) return alert("表單尚未準備好，請重新整理。");
+        
         const fd = new FormData(form);
         const dStr = fd.get('date') || '';
         const actType = fd.get('type') || 'course';
@@ -2121,7 +2127,7 @@ function MainApp() {
             {isEdit ? '編輯活動排程' : (draft.title ? '複製並新增排程' : '教練直接新增排程')}
           </h2>
         </div>
-        <form onSubmit={(e) => handleAdd(e, false)} className="p-10 space-y-8">
+        <form ref={addFormRef} onSubmit={(e) => handleAdd(e, false)} className="p-10 space-y-8">
           {isUnavailable && (
             <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-slate-600 text-sm font-bold flex items-center gap-2 mb-4 shadow-sm">
               <Info size={18}/> 選擇「休假 / 停開」時，人數與費用將自動設為 0，且該時段不開放學員報名。
@@ -2184,10 +2190,9 @@ function MainApp() {
           <div className="border-t border-orange-100 pt-8 flex flex-col sm:flex-row justify-end gap-4">
             <button type="button" onClick={() => setStep('admin_dashboard')} className="w-full sm:w-auto px-10 py-4 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-2xl font-black text-lg transition-colors order-3 sm:order-1">取消</button>
             {!isEdit && (
-                <button type="button" onClick={(e) => {
-                    const form = e.target.closest('form');
-                    if (form.reportValidity()) {
-                        handleAdd(form, true);
+                <button type="button" onClick={() => {
+                    if (addFormRef.current && addFormRef.current.reportValidity()) {
+                        handleAdd(null, true);
                     }
                 }} className="w-full sm:w-auto px-8 py-4 bg-teal-500 hover:bg-teal-600 text-white rounded-2xl font-black text-lg shadow-lg hover:scale-105 transition-all order-2">
                     儲存並繼續新增
