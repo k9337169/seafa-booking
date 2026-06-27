@@ -229,7 +229,7 @@ function MainApp() {
   const [editingActivity, setEditingActivity] = useState(null);
   const [wishToActData, setWishToActData] = useState(null);
   const [activityFormType, setActivityFormType] = useState('course');
-  const [timeFormData, setTimeFormData] = useState({ mode: 'quick', text: '09:00 - 12:00' });
+  const [timeInput, setTimeInput] = useState(''); // 新增：用於控制時間時段的輸入與快速選擇
 
   // --- Firebase 初始化與資料綁定 ---
   useEffect(() => {
@@ -1614,11 +1614,14 @@ function MainApp() {
 
   const renderActivitiesTab = () => {
     const allActivities = Object.entries(activities).flatMap(([date, acts]) => acts.map(act => ({ ...act, date }))).sort((a, b) => new Date(a.date) - new Date(b.date));
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
     return (
       <div className="animate-in fade-in duration-300">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
           <h3 className="text-2xl font-black text-indigo-900 flex items-center gap-3"><CalendarDays className="text-orange-500" size={28}/> 活動排程管理</h3>
-          <button onClick={() => { setEditingActivity(null); setActivityFormType('course'); setTimeFormData({ mode: 'quick', text: '09:00 - 12:00' }); setStep('admin_add'); }} className="px-6 py-3 bg-gradient-to-r from-orange-500 to-rose-500 hover:from-orange-600 hover:to-rose-600 text-white rounded-xl font-bold flex items-center gap-2 text-sm shadow-md transition-colors"><Plus size={18} /> 新增排程</button>
+          <button onClick={() => { setEditingActivity(null); setActivityFormType('course'); setTimeInput(''); setStep('admin_add'); }} className="px-6 py-3 bg-gradient-to-r from-orange-500 to-rose-500 hover:from-orange-600 hover:to-rose-600 text-white rounded-xl font-bold flex items-center gap-2 text-sm shadow-md transition-colors"><Plus size={18} /> 新增排程</button>
         </div>
         <div className="overflow-x-auto rounded-2xl border border-orange-100 shadow-sm">
           <table className="w-full text-left border-collapse min-w-[900px]">
@@ -1635,34 +1638,36 @@ function MainApp() {
               {allActivities.map((act) => {
                 const isUnavailable = act.type === 'unavailable';
                 const currentRegs = isUnavailable ? 0 : act.totalSpots - act.spots;
+                const isPast = new Date(act.date) < today;
+
                 return (
-                  <tr key={act.id} className="hover:bg-orange-50/30 transition-colors">
+                  <tr key={act.id} className={`transition-colors ${isPast ? 'bg-slate-50/50 opacity-70' : 'hover:bg-orange-50/30'}`}>
                     <td className="py-5 px-6">
-                      <div className="font-black text-indigo-900 text-base">{act.date}</div>
+                      <div className={`font-black text-base ${isPast ? 'text-slate-500' : 'text-indigo-900'}`}>{act.date} {isPast && <span className="text-[10px] bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded ml-1">已過期</span>}</div>
                       <div className="text-sm text-indigo-900/60 font-bold mt-1">{act.time}</div>
                     </td>
                     <td className="py-5 px-6">
-                      <div className={`font-black text-lg flex items-center gap-2 ${isUnavailable ? 'text-slate-500 line-through decoration-slate-300' : 'text-indigo-900'}`}>
+                      <div className={`font-black text-lg flex items-center gap-2 ${isUnavailable ? 'text-slate-500 line-through decoration-slate-300' : (isPast ? 'text-slate-700' : 'text-indigo-900')}`}>
                         {act.title}
                         {act.initiator && !isUnavailable && <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded tracking-widest border border-amber-200">許願人:{act.initiator}</span>}
                       </div>
                       <div className="mt-2"><Badge type={act.type} /></div>
                     </td>
-                    <td className={`py-5 px-6 font-bold ${isUnavailable ? 'text-slate-400' : 'text-indigo-900/70'}`}>{act.instructor}</td>
+                    <td className={`py-5 px-6 font-bold ${isUnavailable || isPast ? 'text-slate-400' : 'text-indigo-900/70'}`}>{act.instructor}</td>
                     <td className="py-5 px-6">
                       {isUnavailable ? (
                         <span className="text-slate-400 font-bold">-</span>
                       ) : (
                         <>
-                          <div className="font-black text-indigo-900 text-sm">已報：<span className="text-orange-600 text-base">{currentRegs}</span> 人</div>
-                          <div className="text-indigo-900/50 font-bold text-xs mt-1 bg-orange-50 inline-block px-2 py-0.5 rounded mb-1">成團:{act.minSpots || 1} / 滿團:{act.totalSpots}</div>
+                          <div className={`font-black text-sm ${isPast ? 'text-slate-500' : 'text-indigo-900'}`}>已報：<span className={`text-base ${isPast ? 'text-slate-600' : 'text-orange-600'}`}>{currentRegs}</span> 人</div>
+                          <div className={`font-bold text-xs mt-1 inline-block px-2 py-0.5 rounded mb-1 ${isPast ? 'text-slate-400 bg-slate-100' : 'text-indigo-900/50 bg-orange-50'}`}>成團:{act.minSpots || 1} / 滿團:{act.totalSpots}</div>
                           {act.discountCode && <div className="text-[10px] text-emerald-600 font-black flex items-center gap-1"><Tag size={12}/> 折扣碼: {act.discountCode} (-${act.discountAmount})</div>}
                         </>
                       )}
                     </td>
                     <td className="py-5 px-6 text-right">
                       <div className="flex justify-end gap-2">
-                        <button onClick={() => { setEditingActivity({ ...act }); setActivityFormType(act.type || 'course'); setTimeFormData({ mode: 'text', text: act.time || '09:00 - 12:00' }); setStep('admin_add'); }} title="編輯活動" className="p-2.5 bg-orange-50 text-indigo-900/50 hover:text-orange-600 hover:bg-orange-100 rounded-full transition-colors"><Pencil size={18} /></button>
+                        <button onClick={() => { setEditingActivity({ ...act }); setActivityFormType(act.type || 'course'); setTimeInput(act.time || ''); setStep('admin_add'); }} title="編輯活動" className="p-2.5 bg-orange-50 text-indigo-900/50 hover:text-orange-600 hover:bg-orange-100 rounded-full transition-colors"><Pencil size={18} /></button>
                         <button onClick={async () => { if(window.confirm('確定刪除？')) { const actRef = doc(db, 'artifacts', appId, 'public', 'data', 'activities', act.id); await deleteDoc(actRef); } }} title="刪除活動" className="p-2.5 bg-rose-50 text-rose-400 hover:text-rose-600 hover:bg-rose-100 rounded-full transition-colors"><Trash2 size={18} /></button>
                       </div>
                     </td>
@@ -1855,7 +1860,7 @@ function MainApp() {
                       <td className="py-5 px-6 text-right">
                         <div className="flex justify-end gap-2 items-center">
                           {w.status !== 'opened' && (
-                            <button onClick={() => { setWishToActData(w); setTimeFormData({ mode: 'quick', text: '09:00 - 12:00' }); setStep('admin_wish_to_act'); }} title="將此許願轉為正式開團" className="px-4 py-2 bg-gradient-to-r from-orange-500 to-rose-500 hover:from-orange-600 hover:to-rose-600 text-white text-xs rounded-xl font-bold shadow-sm transition-all hover:scale-105 whitespace-nowrap">轉開團</button>
+                            <button onClick={() => { setWishToActData(w); setTimeInput(w.wishTime === 'morning' ? '09:00 - 12:00' : w.wishTime === 'afternoon' ? '13:30 - 16:30' : '全天'); setStep('admin_wish_to_act'); }} title="將此許願轉為正式開團" className="px-4 py-2 bg-gradient-to-r from-orange-500 to-rose-500 hover:from-orange-600 hover:to-rose-600 text-white text-xs rounded-xl font-bold shadow-sm transition-all hover:scale-105 whitespace-nowrap">轉開團</button>
                           )}
                           {w.status === 'pending' && (
                             <button onClick={() => updateWishStatus(w.id, 'contacted')} title="標記為已聯絡" className="px-3 py-2 bg-amber-50 text-amber-600 border border-amber-200 hover:bg-amber-100 text-xs rounded-xl font-bold transition-colors whitespace-nowrap">已聯絡</button>
@@ -1884,33 +1889,30 @@ function MainApp() {
 
     const handleWishToAct = async (e) => {
       e.preventDefault();
-      const fd = new FormData(e.target);
-      
-      const totalSpots = parseInt(fd.get('totalSpots')) || 0;
-      const minSpots = parseInt(fd.get('minSpots')) || 1;
-      const price = parseInt(fd.get('price')) || 0;
-      const discountAmount = parseInt(fd.get('discountAmount')) || 0;
-
-      const newAct = {
-         id: 'act_' + Date.now(),
-         date: fd.get('date'),
-         time: fd.get('time') || timeFormData.text, 
-         title: fd.get('title'), 
-         instructor: fd.get('instructor'),
-         spots: totalSpots, 
-         totalSpots: totalSpots,
-         minSpots: minSpots,
-         price: price,
-         type: fd.get('type'), 
-         location: fd.get('location'),
-         initiator: w.nickname || w.name,
-         discountCode: fd.get('discountCode')?.toUpperCase() || '',
-         discountAmount: discountAmount
-      };
-      
       try {
+        if (!db) return alert("資料庫未連線，無法儲存。");
+        const fd = new FormData(e.target);
+        const actType = fd.get('type') || 'course';
+        
+        const newAct = {
+           id: 'act_' + Date.now(),
+           date: fd.get('date') || '',
+           time: fd.get('time') || '', 
+           title: fd.get('title') || '', 
+           instructor: fd.get('instructor') || '',
+           spots: parseInt(fd.get('totalSpots'), 10) || 0, 
+           totalSpots: parseInt(fd.get('totalSpots'), 10) || 0,
+           minSpots: parseInt(fd.get('minSpots'), 10) || 1,
+           price: parseInt(fd.get('price'), 10) || 0,
+           type: actType, 
+           location: fd.get('location') || '',
+           initiator: w.nickname || w.name || null,
+           discountCode: (fd.get('discountCode') || '').toString().trim().toUpperCase(),
+           discountAmount: parseInt(fd.get('discountAmount'), 10) || 0
+        };
+        
         const actRef = doc(db, 'artifacts', appId, 'public', 'data', 'activities', newAct.id);
-        await setDoc(actRef, newAct);
+        await setDoc(actRef, newAct, { merge: true });
 
         const wishRef = doc(db, 'artifacts', appId, 'public', 'data', 'wishlists', w.id);
         await setDoc(wishRef, { status: 'opened' }, { merge: true });
@@ -1920,8 +1922,8 @@ function MainApp() {
         setActiveAdminTab('activities');
         alert('✅ 已成功將許願轉為正式排程開團！');
       } catch (err) {
-        console.error("許願轉開團失敗:", err);
-        alert('❌ 上架失敗，請檢查輸入格式。錯誤原因: ' + err.message);
+        console.error("轉開團失敗:", err);
+        alert('❌ 儲存失敗，請檢查輸入的資料格式是否正確：' + err.message);
       }
     };
 
@@ -1948,24 +1950,15 @@ function MainApp() {
         <form onSubmit={handleWishToAct} className="p-10 pt-4 space-y-8">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
             <div><label className="block text-sm font-black text-indigo-900 mb-3">開團日期 *</label><input required type="date" name="date" className="w-full px-5 py-4 bg-orange-50/50 border-2 border-transparent focus:border-orange-400 focus:bg-white rounded-2xl outline-none font-bold transition-colors" /></div>
-            
-            <div className="sm:col-span-2 bg-amber-50/50 p-6 rounded-2xl border border-amber-100">
-              <label className="block text-sm font-black text-indigo-900 mb-4 flex items-center gap-2">
-                <Clock size={18} className="text-amber-500"/> 活動時間設定 *
-              </label>
-              <div className="flex flex-wrap gap-3 mb-4">
-                 <button type="button" onClick={() => setTimeFormData({ mode: 'quick', text: '09:00 - 12:00' })} className={`px-4 py-2.5 rounded-xl font-black text-sm transition-all ${timeFormData.text === '09:00 - 12:00' && timeFormData.mode !== 'text' ? 'bg-amber-500 text-white shadow-md scale-105' : 'bg-white border border-amber-200 text-amber-700 hover:bg-amber-100'}`}>上午 (09:00-12:00)</button>
-                 <button type="button" onClick={() => setTimeFormData({ mode: 'quick', text: '13:00 - 16:00' })} className={`px-4 py-2.5 rounded-xl font-black text-sm transition-all ${timeFormData.text === '13:00 - 16:00' && timeFormData.mode !== 'text' ? 'bg-amber-500 text-white shadow-md scale-105' : 'bg-white border border-amber-200 text-amber-700 hover:bg-amber-100'}`}>下午 (13:00-16:00)</button>
-                 <button type="button" onClick={() => setTimeFormData({ mode: 'quick', text: '09:00 - 17:00' })} className={`px-4 py-2.5 rounded-xl font-black text-sm transition-all ${timeFormData.text === '09:00 - 17:00' && timeFormData.mode !== 'text' ? 'bg-amber-500 text-white shadow-md scale-105' : 'bg-white border border-amber-200 text-amber-700 hover:bg-amber-100'}`}>全天 (09:00-17:00)</button>
-                 <button type="button" onClick={() => setTimeFormData({ mode: 'text', text: timeFormData.text })} className={`px-4 py-2.5 rounded-xl font-black text-sm transition-all ${timeFormData.mode === 'text' ? 'bg-orange-500 text-white shadow-md scale-105' : 'bg-white border border-orange-200 text-orange-600 hover:bg-orange-50'}`}>自訂文字輸入</button>
+            <div>
+              <label className="block text-sm font-black text-indigo-900 mb-3">時間時段 (可點選常用或自訂) *</label>
+              <input required type="text" name="time" value={timeInput} onChange={e => setTimeInput(e.target.value)} placeholder="如：09:00 - 12:00" className="w-full px-5 py-4 bg-orange-50/50 border-2 border-transparent focus:border-orange-400 focus:bg-white rounded-2xl outline-none font-bold transition-colors mb-3" />
+              <div className="flex flex-wrap gap-2">
+                 {['08:00 - 10:00', '09:00 - 12:00', '13:00 - 15:00', '13:30 - 16:30', '18:00 - 20:00', '19:00 - 21:00', '全天'].map(t => (
+                   <button type="button" key={t} onClick={() => setTimeInput(t)} className="px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-lg text-xs font-black hover:bg-indigo-100 hover:text-indigo-700 transition-colors border border-indigo-100/50">{t}</button>
+                 ))}
               </div>
-              {timeFormData.mode === 'text' ? (
-                 <input required type="text" name="time" value={timeFormData.text} onChange={(e) => setTimeFormData({ mode: 'text', text: e.target.value })} placeholder="如：依潮汐狀況 或 18:00-20:00" className="w-full px-5 py-4 bg-white border-2 border-amber-200 focus:border-amber-400 rounded-xl outline-none font-bold transition-colors" />
-              ) : (
-                 <input type="hidden" name="time" value={timeFormData.text} />
-              )}
             </div>
-
             <div className="sm:col-span-2">
               <label className="block text-sm font-black text-indigo-900 mb-3">活動名稱 *</label>
               <input required type="text" name="title" defaultValue={w.wishContent} list="c-opts" placeholder="請確認或修改課程名稱" className="w-full px-5 py-4 bg-orange-50/50 border-2 border-transparent focus:border-orange-400 focus:bg-white rounded-2xl outline-none font-bold transition-colors" />
@@ -2026,55 +2019,47 @@ function MainApp() {
 
     const handleAdd = async (e) => {
       e.preventDefault();
-      const fd = new FormData(e.target);
-      const dStr = fd.get('date');
-      const actType = fd.get('type');
-      const isUnavail = actType === 'unavailable';
-
-      const totalSpots = isUnavail ? 0 : (parseInt(fd.get('totalSpots')) || 0);
-      const minSpots = isUnavail ? 0 : (parseInt(fd.get('minSpots')) || 1);
-      const price = isUnavail ? 0 : (parseInt(fd.get('price')) || 0);
-      const loc = isUnavail ? '無' : fd.get('location');
-      const discountCode = isUnavail ? '' : (fd.get('discountCode')?.toUpperCase() || '');
-      const discountAmount = isUnavail ? 0 : (parseInt(fd.get('discountAmount')) || 0);
-      
-      const prevSpots = isEdit ? (editingActivity.totalSpots - editingActivity.spots) : 0;
-      let newSpots = totalSpots - prevSpots;
-      if (newSpots < 0) newSpots = 0;
-      const spots = isEdit && !isUnavail ? newSpots : totalSpots;
-
-      const newAct = { 
-        id: isEdit ? editingActivity.id : 'act_' + Date.now(), 
-        date: dStr, // 確保寫入日期欄位
-        time: fd.get('time') || timeFormData.text, 
-        title: fd.get('title'), 
-        instructor: fd.get('instructor'), 
-        spots: spots || 0, 
-        totalSpots: totalSpots || 0, 
-        minSpots: minSpots || 1, 
-        price: price || 0, 
-        type: actType, 
-        location: loc,
-        initiator: (isEdit && editingActivity.initiator) ? editingActivity.initiator : null,
-        discountCode, 
-        discountAmount
-      };
-
       try {
-        const actRef = doc(db, 'artifacts', appId, 'public', 'data', 'activities', newAct.id);
-        await setDoc(actRef, newAct);
+        if (!db) return alert("資料庫未連線，無法儲存。");
+        const fd = new FormData(e.target);
+        const dStr = fd.get('date') || '';
+        const actType = fd.get('type') || 'course';
+        const isUnavail = actType === 'unavailable';
 
-        // 若編輯時更改了日期，刪除舊有日期的活動紀錄
-        if (isEdit && editingActivity.date !== dStr) {
-           const oldActRef = doc(db, 'artifacts', appId, 'public', 'data', 'activities', editingActivity.id);
-           await deleteDoc(oldActRef);
+        const totalSpots = isUnavail ? 0 : (parseInt(fd.get('totalSpots'), 10) || 0);
+        const minSpots = isUnavail ? 0 : (parseInt(fd.get('minSpots'), 10) || 1);
+        const price = isUnavail ? 0 : (parseInt(fd.get('price'), 10) || 0);
+        const loc = isUnavail ? '無' : (fd.get('location') || '');
+        const discountCode = isUnavail ? '' : (fd.get('discountCode') || '').toString().trim().toUpperCase();
+        const discountAmount = isUnavail ? 0 : (parseInt(fd.get('discountAmount'), 10) || 0);
+        
+        let spots = totalSpots;
+        if (isEdit && !isUnavail) {
+           const prevTotal = parseInt(editingActivity.totalSpots, 10) || 0;
+           const prevSpots = parseInt(editingActivity.spots, 10) || 0;
+           const diff = prevTotal - prevSpots; // 已報名人數
+           spots = Math.max(0, totalSpots - diff);
         }
 
+        const newAct = { 
+          id: isEdit ? editingActivity.id : 'act_' + Date.now(), 
+          date: dStr,
+          time: fd.get('time') || '', 
+          title: fd.get('title') || '', 
+          instructor: fd.get('instructor') || '', 
+          spots, totalSpots, minSpots, price, type: actType, location: loc,
+          initiator: isEdit ? (editingActivity.initiator || null) : null,
+          discountCode, discountAmount
+        };
+
+        const actRef = doc(db, 'artifacts', appId, 'public', 'data', 'activities', newAct.id);
+        await setDoc(actRef, newAct, { merge: true });
+
         setStep('admin_dashboard');
-        alert('✅ 排程已成功上架！');
+        alert(isEdit ? '✅ 排程已成功更新！' : '✅ 排程已成功新增！');
       } catch (err) {
-        console.error("上架排程失敗:", err);
-        alert('❌ 上架失敗，請檢查資料格式。錯誤原因: ' + err.message);
+        console.error("儲存活動失敗:", err);
+        alert('❌ 儲存失敗，請檢查輸入的資料：' + err.message);
       }
     };
 
@@ -2095,24 +2080,15 @@ function MainApp() {
           )}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
             <div><label className="block text-sm font-black text-indigo-900 mb-3">日期 *</label><input required type="date" name="date" defaultValue={editingActivity?.date} className="w-full px-5 py-4 bg-orange-50/50 border-2 border-transparent focus:border-orange-400 focus:bg-white rounded-2xl outline-none font-bold transition-colors" /></div>
-            
-            <div className="sm:col-span-2 bg-indigo-50/50 p-6 rounded-2xl border border-indigo-100">
-              <label className="block text-sm font-black text-indigo-900 mb-4 flex items-center gap-2">
-                <Clock size={18} className="text-indigo-500"/> 活動時間設定 *
-              </label>
-              <div className="flex flex-wrap gap-3 mb-4">
-                 <button type="button" onClick={() => setTimeFormData({ mode: 'quick', text: '09:00 - 12:00' })} className={`px-4 py-2.5 rounded-xl font-black text-sm transition-all ${timeFormData.text === '09:00 - 12:00' && timeFormData.mode !== 'text' ? 'bg-indigo-600 text-white shadow-md scale-105' : 'bg-white border border-indigo-200 text-indigo-600 hover:bg-indigo-100'}`}>上午 (09:00-12:00)</button>
-                 <button type="button" onClick={() => setTimeFormData({ mode: 'quick', text: '13:00 - 16:00' })} className={`px-4 py-2.5 rounded-xl font-black text-sm transition-all ${timeFormData.text === '13:00 - 16:00' && timeFormData.mode !== 'text' ? 'bg-indigo-600 text-white shadow-md scale-105' : 'bg-white border border-indigo-200 text-indigo-600 hover:bg-indigo-100'}`}>下午 (13:00-16:00)</button>
-                 <button type="button" onClick={() => setTimeFormData({ mode: 'quick', text: '09:00 - 17:00' })} className={`px-4 py-2.5 rounded-xl font-black text-sm transition-all ${timeFormData.text === '09:00 - 17:00' && timeFormData.mode !== 'text' ? 'bg-indigo-600 text-white shadow-md scale-105' : 'bg-white border border-indigo-200 text-indigo-600 hover:bg-indigo-100'}`}>全天 (09:00-17:00)</button>
-                 <button type="button" onClick={() => setTimeFormData({ mode: 'text', text: timeFormData.text })} className={`px-4 py-2.5 rounded-xl font-black text-sm transition-all ${timeFormData.mode === 'text' ? 'bg-orange-500 text-white shadow-md scale-105' : 'bg-white border border-orange-200 text-orange-600 hover:bg-orange-50'}`}>自訂文字輸入</button>
+            <div>
+              <label className="block text-sm font-black text-indigo-900 mb-3">時間時段 (可點選常用或自訂) *</label>
+              <input required type="text" name="time" value={timeInput} onChange={e => setTimeInput(e.target.value)} placeholder="如：09:00 - 12:00" className="w-full px-5 py-4 bg-orange-50/50 border-2 border-transparent focus:border-orange-400 focus:bg-white rounded-2xl outline-none font-bold transition-colors mb-3" />
+              <div className="flex flex-wrap gap-2">
+                 {['08:00 - 10:00', '09:00 - 12:00', '13:00 - 15:00', '13:30 - 16:30', '18:00 - 20:00', '19:00 - 21:00', '全天'].map(t => (
+                   <button type="button" key={t} onClick={() => setTimeInput(t)} className="px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-lg text-xs font-black hover:bg-indigo-100 hover:text-indigo-700 transition-colors border border-indigo-100/50">{t}</button>
+                 ))}
               </div>
-              {timeFormData.mode === 'text' ? (
-                 <input required type="text" name="time" value={timeFormData.text} onChange={(e) => setTimeFormData({ mode: 'text', text: e.target.value })} placeholder="如：依潮汐狀況 或 18:00-20:00" className="w-full px-5 py-4 bg-white border-2 border-orange-200 focus:border-orange-400 rounded-xl outline-none font-bold transition-colors" />
-              ) : (
-                 <input type="hidden" name="time" value={timeFormData.text} />
-              )}
             </div>
-
             <div className="sm:col-span-2">
               <label className="block text-sm font-black text-indigo-900 mb-3">{isUnavailable ? '休假/事由名稱 *' : '活動名稱 *'}</label>
               <input required type="text" name="title" defaultValue={editingActivity?.title} list="c-opts" placeholder={isUnavailable ? "如：教練進修、場地維護" : "請輸入或選擇課程名稱"} className="w-full px-5 py-4 bg-orange-50/50 border-2 border-transparent focus:border-orange-400 focus:bg-white rounded-2xl outline-none font-bold transition-colors" />
